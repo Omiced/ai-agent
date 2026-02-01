@@ -1,10 +1,11 @@
 import argparse
-import os 
+import os
+import sys 
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from prompts import system_prompt 
-from call_function import available_functions
+from call_function import available_functions, call_function
 
 def main():
   load_dotenv()
@@ -22,7 +23,7 @@ def main():
   args = parser.parse_args()
 
   messages=[types.Content(role="user",parts=[types.Part(text=args.user_prompt)])]
-
+  functions_responses = []
   response = client.models.generate_content(model="gemini-2.5-flash",
                                             contents=messages,
                                             config=types.GenerateContentConfig(
@@ -39,7 +40,19 @@ def main():
     print(f"Response tokens: {response.usage_metadata.candidates_token_count}") 
   if response.function_calls:
     for function_call in response.function_calls:
-      print(f"Calling function: {function_call.name}({function_call.args})")
+      if args.verbose:
+        function_call_response = call_function(function_call,True)
+      else:
+        function_call_response = call_function(function_call)
+      if not function_call_response.parts:
+        raise Exception("empty parts object")
+      if not function_call_response.parts[0].function_response:
+        raise Exception("not function response")
+      if not function_call_response.parts[0].function_response.response:
+        raise Exception("not response")
+      functions_responses.append(function_call_response.parts[0])
+      if args.verbose:
+        print(f"-> {function_call_response.parts[0].function_response.response}")
   else:
     print(response.text)
 
